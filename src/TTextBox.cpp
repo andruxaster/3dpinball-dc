@@ -238,6 +238,8 @@ void TTextBox::Draw()
 				}
 				else
 				{
+					// Character missing from font: skip it (used to loop forever)
+					++textEnd;
 					curChar = *textEnd;
 				}
 			}

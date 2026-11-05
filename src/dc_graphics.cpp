@@ -3,6 +3,7 @@
 #include "maths.h"
 #include "render.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <malloc.h>
@@ -16,9 +17,13 @@ void dc_graphics::Initialize()
 	// splash image is 320x222 RGB565
 	splash_raw = new uint16_t[320*222];
 
+	memset(splash_raw, 0, 320*222*2);
 	FILE* f = fopen("/rd/splash.raw", "rb");
-	fread(splash_raw, 320*222*2, 1, f);
-	fclose(f);
+	if (f)
+	{
+		fread(splash_raw, 320*222*2, 1, f);
+		fclose(f);
+	}
 }
 
 void dc_graphics::SwapBuffers()
@@ -99,9 +104,14 @@ void dc_graphics::Update()
 	for (uint32_t i=0; i<render::get_dirty_regions().size(); i++)
 	{
 		const rectangle_type& dirty = render::get_dirty_regions()[i];
-		for (int y=dirty.YPosition; y<dirty.YPosition + dirty.Height; y++)
+		// Clamp to vscreen so a bad region can't write outside the framebuffer
+		int x0 = std::max(dirty.XPosition, 0);
+		int y0 = std::max(dirty.YPosition, 0);
+		int x1 = std::min(dirty.XPosition + dirty.Width, render::vscreen->Width);
+		int y1 = std::min(dirty.YPosition + dirty.Height, render::vscreen->Height);
+		for (int y=y0; y<y1; y++)
 		{
-			for (int x=dirty.XPosition; x<dirty.XPosition + dirty.Width; x++)
+			for (int x=x0; x<x1; x++)
 			{
 				Rgba c = render::vscreen->BmpBufPtr1[y*render::vscreen->Width+x].rgba;
 				vram_s[startPos + y*vid_mode->width+x] =

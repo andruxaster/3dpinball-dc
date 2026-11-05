@@ -11,6 +11,8 @@
 #include <dc/sound/sound.h>
 #include <dc/sound/sfxmgr.h>
 
+static constexpr int AICA_CHANNELS = 64;
+
 int Sound::num_channels;
 bool Sound::enabled_flag = false;
 int* Sound::TimeStamps = nullptr;
@@ -38,35 +40,32 @@ typedef struct snd_effect {
     LIST_ENTRY(snd_effect)  list;
 } snd_effect_t;
 
-static snd_effect_t *create_snd_effect(drwav *wavhdr, uint8_t *wav_data) {
+static snd_effect_t *create_snd_effect(const int16_t *samples, uint32_t frames, uint32_t rate) {
     snd_effect_t *effect;
-    uint32_t len, rate;
-    uint16_t channels;
-    
+    uint32_t bytes = frames * sizeof(int16_t);
+
     effect = (snd_effect_t*)malloc(sizeof(snd_effect_t));
     if(effect == NULL)
         return NULL;
 
     memset(effect, 0, sizeof(snd_effect_t));
 
-    channels = wavhdr->fmt.channels;
-    rate = wavhdr->fmt.sampleRate;
-    len = wavhdr->dataChunkDataSize*2;
-
+    // Samples are always converted to 16-bit mono before upload
     effect->rate = rate;
-    effect->stereo = channels > 1;
+    effect->stereo = 0;
+    effect->fmt = AICA_SM_16BIT;
+    effect->len = frames;
 
-	// just hardcode this for now. the game's sounds are 8-bit mono samples,
-	// which are then converted to 16-bit mono by dr_wav
-	effect->fmt = AICA_SM_16BIT;
-	effect->len = len / 2;
+    // spu_memload_sq() transfers in 32-byte blocks
+    effect->locl = snd_mem_malloc((bytes + 31) & ~31);
+    if(!effect->locl) {
+        free(effect);
+        return NULL;
+    }
+    spu_memload_sq(effect->locl, (void*)samples, (bytes + 31) & ~31);
 
-	effect->locl = snd_mem_malloc(len);
-	if(effect->locl)
-		spu_memload_sq(effect->locl, wav_data, len);
-
-	effect->locr = 0;
-	return effect;
+    effect->locr = 0;
+    return effect;
 }
 
 static sfxhnd_t snd_sfx_load_alt(const char *fn) {
@@ -76,40 +75,47 @@ static sfxhnd_t snd_sfx_load_alt(const char *fn) {
     if (!drwav_init_file(&wavfp, fn, NULL))
 		return SFXHND_INVALID;
 
-    int16_t* pSampleData = new int16_t[wavfp.totalPCMFrameCount * wavfp.channels];
-	if (pSampleData == 0)
+	const uint32_t frames = (uint32_t)wavfp.totalPCMFrameCount;
+	const uint32_t channels = wavfp.channels ? wavfp.channels : 1;
+	const uint32_t rate = wavfp.sampleRate;
+	if (!frames)
 	{
 		drwav_uninit(&wavfp);
 		return SFXHND_INVALID;
 	}
 
-	uint32_t totalRead = drwav_read_pcm_frames(&wavfp, wavfp.totalPCMFrameCount, pSampleData);
+	// Read any source format (8-bit, 16-bit...) as signed 16-bit.
+	// Padded to a 32-byte multiple for the store-queue upload.
+	const uint32_t paddedFrames = (frames + 15) & ~15u;
+	int16_t* raw = new int16_t[(size_t)paddedFrames * channels]();
+	uint32_t totalRead = (uint32_t)drwav_read_pcm_frames_s16(&wavfp, frames, raw);
+	drwav_uninit(&wavfp);
 	if (!totalRead)
 	{
-		drwav_uninit(&wavfp);
-		delete[] pSampleData;
+		delete[] raw;
 		return SFXHND_INVALID;
 	}
 
-	if (wavfp.bitsPerSample == 8) // 8 bit
+	// Downmix to mono if needed
+	int16_t* mono = raw;
+	if (channels > 1)
 	{
-		int16_t* _8bitdata = new int16_t[wavfp.totalPCMFrameCount * wavfp.channels];
-		drwav_u8_to_s16((drwav_int16*)_8bitdata, (drwav_uint8*)pSampleData, wavfp.totalPCMFrameCount);
-		delete[] pSampleData;
-		pSampleData = _8bitdata;
+		mono = new int16_t[paddedFrames]();
+		for (uint32_t i = 0; i < totalRead; i++)
+		{
+			int sum = 0;
+			for (uint32_t c = 0; c < channels; c++)
+				sum += raw[i * channels + c];
+			mono[i] = (int16_t)(sum / (int)channels);
+		}
+		delete[] raw;
 	}
 
     /* Create and initialize sound effect */
-    effect = create_snd_effect(&wavfp, (uint8_t*)pSampleData);
-    if(!effect) {
-		drwav_uninit(&wavfp);
-        delete[] pSampleData;
+    effect = create_snd_effect(mono, totalRead, rate);
+	delete[] mono;
+    if(!effect)
         return SFXHND_INVALID;
-    }
-
-    /* Finish up and return the sound effect handle */
-	delete[] pSampleData;
-	drwav_uninit(&wavfp);
 
     LIST_INSERT_HEAD(&snd_effects, effect, list);
 
@@ -154,7 +160,10 @@ void Sound::PlaySound(uint8_t* buf, int time, int size, int samplerate)
 {
 	if (!enabled_flag || !buf) return;
 	int channel = snd_sfx_play((sfxhnd_t)buf, 255, 128);
-	if (channel >= 0)
+	// KOS returns an AICA channel number (0..63), not an index in [0, num_channels).
+	// Writing TimeStamps[channel] used to overflow the heap buffer and corrupt
+	// nearby objects (e.g. text box layout), see "Known issues" in README.
+	if (channel >= 0 && channel < AICA_CHANNELS)
 		TimeStamps[channel] = time;
 }
 
@@ -179,5 +188,5 @@ void Sound::SetChannels(int channels)
 
 	num_channels = channels;
 	delete[] TimeStamps;
-	TimeStamps = new int[num_channels]();
+	TimeStamps = new int[AICA_CHANNELS]();
 }

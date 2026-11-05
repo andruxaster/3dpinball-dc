@@ -19,4 +19,4 @@ Libraries used:
 * GDemu reset: START + A + B + X + Y
 
 ## Known issues
-* After playing for a short while, the score/mission info text panel starts displaying words in new lines, causing some text to not fully fit or be cut off
+* ~~After playing for a short while, the score/mission info text panel starts displaying words in new lines~~ — fixed: caused by a heap overflow in `Sound::PlaySound` (AICA channel 0..63 used as index into an 8-entry array)
