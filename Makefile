@@ -14,7 +14,11 @@ C_FILES      := $(foreach dir,$(SOURCE_DIRS),$(wildcard $(dir)/*.c))
 OBJS         := $(C_FILES:%.c=%.o) $(CPP_FILES:%.cpp=%.o)
 
 CXXFLAGS     := -IlibADXplay/LibADX
-LIBS         := -lADX
+
+# LibADX is built together with the game, no separate install into KOS addons needed
+ADX_DIR      := libADXplay/LibADX
+OBJS         += $(ADX_DIR)/libadx.o $(ADX_DIR)/snddrv.o
+LIBS         :=
 
 # Optional path to a directory of resources to bundle within your ELF binary.
 # Its contents are accessible via the "/rd/" virtual directory at runtime.

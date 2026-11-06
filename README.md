@@ -9,6 +9,7 @@ Built with [DreamSDK](https://github.com/dreamsdk/dreamsdk)
 Libraries used:
 * LibADX: https://dcemulation.org/phpBB/viewtopic.php?t=101638
   * With some modifications to compile on latest KallistiOS
+  * Built automatically as part of `make`, no separate install needed
 
 ## Controls
 * Paddles: DPad Left-Right / X/B / LT/RT
