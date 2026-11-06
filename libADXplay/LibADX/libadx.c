@@ -25,7 +25,9 @@
 static ADX_INFO ADX_Info;
 static FILE *adx_in;
 static int pcm_samples, loop;
-static unsigned char adx_buf[ADX_HDR_SIZE];
+/* Loop type 4 headers keep loop info 0x0c bytes further, up to offset 0x38 */
+#define ADX_HDR_READ_SIZE (ADX_ADDR_BYTE_END + 0x0c + 4)
+static unsigned char adx_buf[ADX_HDR_READ_SIZE];
 
 /* Local function definitions */
 static int  adx_parse( unsigned char *buf );
@@ -142,7 +144,8 @@ int adx_stop()
 static int adx_parse( unsigned char *buf )
 {
     fseek( adx_in, 0, SEEK_SET );          /* Read the ADX Header into memory */
-	fread( buf, 1, ADX_HDR_SIZE, adx_in );
+	memset( buf, 0, ADX_HDR_READ_SIZE );
+	fread( buf, 1, ADX_HDR_READ_SIZE, adx_in );
 	if(buf[0]!=ADX_HDR_SIG ) return -1;           /* Check ADX File Signature */
 	
     /* Parse the ADX File header */

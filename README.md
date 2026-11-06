@@ -4,7 +4,15 @@ Port of 3D Pinball - Space Cadet to the Sega Dreamcast, based on the [decompilat
 
 ![image](screenshot.png)
 
-Built with [DreamSDK](https://github.com/dreamsdk/dreamsdk)
+Built with [DreamSDK](https://github.com/dreamsdk/dreamsdk) or a regular KallistiOS install on Linux.
+
+### Building
+```sh
+make        # 3dpinball-dc.elf
+make cdi    # 3dpinball-dc.cdi
+```
+On Linux `make cdi` uses KOS `scramble`/`makeip` (built automatically from `$KOS_BASE/utils`),
+`mkisofs`/`genisoimage` and [`cdi4dc`](https://github.com/Kazade/img4dc). With DreamSDK, `makedisc` is used.
 
 Libraries used:
 * LibADX: https://dcemulation.org/phpBB/viewtopic.php?t=101638

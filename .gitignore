@@ -291,3 +291,6 @@ cd_root/*.BMP
 cd_root/*.MID
 cd_root/*.MDS
 cd_root/SOUND/
+IP.BIN
+cd_root/1ST_READ.BIN
+*.iso

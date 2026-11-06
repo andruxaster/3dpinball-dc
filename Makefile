@@ -51,11 +51,30 @@ run: $(TARGET)
 dist: $(TARGET)
 	$(KOS_STRIP) $(TARGET)
 
+# Disc image. Works with DreamSDK (makedisc) and with a plain Linux KOS install
+# (KOS utils + mkisofs/genisoimage + cdi4dc). Tool paths can be overridden.
+KOS_UTILS ?= $(KOS_BASE)/utils
+SCRAMBLE  ?= $(shell command -v scramble 2>/dev/null || echo $(KOS_UTILS)/scramble/scramble)
+MAKEIP    ?= $(shell command -v makeip 2>/dev/null || echo $(KOS_UTILS)/makeip/makeip)
+MKISOFS   ?= $(shell command -v mkisofs 2>/dev/null || command -v genisoimage 2>/dev/null)
+CDI4DC    ?= cdi4dc
+DISC_NAME := $(basename $(TARGET))
+
 cdi: $(TARGET) cd_root
-	elf2bin $(TARGET)
-	scramble $(basename $(TARGET)).bin cd_root/1ST_READ.BIN
-	makeip -l logo.png -g "3D PINBALL" -f IP.BIN
-	makedisc $(basename $(TARGET)).cdi cd_root IP.BIN
+	@test -x "$(SCRAMBLE)" || $(MAKE) -C $(KOS_UTILS)/scramble
+	@test -x "$(MAKEIP)" || $(MAKE) -C $(KOS_UTILS)/makeip
+	$(KOS_OBJCOPY) -R .stack -O binary $(TARGET) $(DISC_NAME).bin
+	$(SCRAMBLE) $(DISC_NAME).bin cd_root/1ST_READ.BIN
+	$(MAKEIP) -l logo.png -g "3D PINBALL" -f IP.BIN
+	@if command -v makedisc >/dev/null 2>&1; then \
+		echo makedisc $(DISC_NAME).cdi cd_root IP.BIN; \
+		makedisc $(DISC_NAME).cdi cd_root IP.BIN; \
+	else \
+		test -n "$(MKISOFS)" || { echo "mkisofs/genisoimage not found (apt install genisoimage)"; exit 1; }; \
+		command -v $(CDI4DC) >/dev/null 2>&1 || { echo "cdi4dc not found (build img4dc: https://github.com/Kazade/img4dc)"; exit 1; }; \
+		$(MKISOFS) -C 0,11702 -V 3DPINBALL -G IP.BIN -r -J -l -o $(DISC_NAME).iso cd_root && \
+		$(CDI4DC) $(DISC_NAME).iso $(DISC_NAME).cdi && rm -f $(DISC_NAME).iso; \
+	fi
 
 cd_root:
 	mkdir cd_root
