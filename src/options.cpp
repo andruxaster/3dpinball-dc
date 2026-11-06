@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "options.h"
 
+#include <cstdlib>
+
 #include "midi.h"
 #include "Sound.h"
 #include "winmain.h"
@@ -97,15 +99,26 @@ void options::set_string(LPCSTR lpValueName, LPCSTR value)
 	SetSetting(lpValueName, value);
 }
 
+// std::to_string(float) is not available in the sh-elf libstdc++ (GCC 15 / newlib),
+// so format floats manually.
+static std::string float_to_string(float value)
+{
+	char buf[32];
+	snprintf(buf, sizeof buf, "%f", static_cast<double>(value));
+	return buf;
+}
+
 float options::get_float(LPCSTR lpValueName, float defaultValue)
 {
-	auto value = GetSetting(lpValueName, std::to_string(defaultValue));
-	return std::stof(value);
+	auto value = GetSetting(lpValueName, float_to_string(defaultValue));
+	char* end = nullptr;
+	float result = strtof(value.c_str(), &end);
+	return end != value.c_str() ? result : defaultValue;
 }
 
 void options::set_float(LPCSTR lpValueName, float data)
 {
-	SetSetting(lpValueName, std::to_string(data));
+	SetSetting(lpValueName, float_to_string(data));
 }
 
 
